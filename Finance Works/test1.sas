@@ -1,0 +1,10 @@
+data cqi_results;
+set cqi_results;
+if substr(_type_,1,1) eq 0 then do;
+fworks_flag = 'All';
+end;
+if substr(_type_,2,1) eq 0 then do;
+cqi = -1;
+end;
+format ;
+run;
