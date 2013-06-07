@@ -167,3 +167,48 @@ proc print data=snow.fl_data;
 where cost_center not in (., 999);
 var countynm market_name market_manager cost_center brmanager email phone full_address flag_checking flag_CD Flag_InvestmentInsurance ixi_range; 
 run;
+
+
+*Analysis for Justin - focyus in uinderstanding;
+
+*merge new data;
+proc contents data=snow.fl_data varnum short;
+run;
+
+data snow.FL_Data_Updated;
+set snow.fl_data ( keep =zip_num ID Title_Line Address_1 Address_2 City State Zip   Email_Address );
+rename ID = hhid;
+run;
+
+proc sort data=snow.FL_Data_Updated;
+by hhid ;
+run;
+
+data snow.FL_Data_Updated;
+merge  snow.FL_Data_Updated (in=a) data.main_201303;
+by hhid;
+if a;
+run;
+
+proc freq data=snow.FL_Data_Updated;
+where dda eq .;
+run;
+
+*I am missing too many, so I need to match to datamart;
+*do file for kathe;
+
+data _null_;
+set snow.FL_Data_Updated;
+file 'C:\Documents and Settings\ewnym5s\My Documents\Analysis\Snowbirds\snowbirds.txt' dsd dlm='09'x;
+put hhid;
+run;
+
+
+
+proc freq data=snow.fl_data;
+where branch_domiciled eq '00999';
+table flag: commercial: business:;
+run;
+
+
+
