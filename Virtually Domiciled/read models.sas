@@ -1,6 +1,6 @@
 data virtual.models_20130220 (compress=binary);
 length hhid $ 9;
-infile 'C:\Documents and Settings\ewnym5s\My Documents\scoreFile_20130220.txt' lrecl=495 ;
+infile 'C:\Documents and Settings\ewnym5s\My Documents\scoreFile_20130519.txt' lrecl=800 missover;
    input @1   hhidentifier      1-15 
                 @16  mmaScore          16-25                /*  MMA Score Value */
                 @26  securityScore     26-35                /* Securities Score Value */
@@ -41,13 +41,38 @@ infile 'C:\Documents and Settings\ewnym5s\My Documents\scoreFile_20130220.txt' l
                 @451 ilnCondResp_phone       f8.5           /* Channel Adjusted Response Rate - Installment Loan/Phone */
                 @466 ilnCondResp_atm         f8.5           /* Channel Adjusted Response Rate - Installment Loan/ATM */
                 @481 ilnCondResp_mobile      f8.5           /* Channel Adjusted Response Rate - Installment Loan/Mobile */
-                ;
+				
+				/******************************************
+				 *** Conditional CLV  (Added 5/19/2013) ***
+				 ******************************************/				
+				@496 mmDeltaCondClv_Branch       f8.2           /* Channel Adjusted CLV  - MMA/Branch */
+                @511 mmDeltaCondClv_online       f8.2           /* Channel Adjusted CLV  - MMA/Online */
+                @526 mmDeltaCondClv_phone        f8.2           /* Channel Adjusted CLV  - MMA/Phone */
+                @541 mmDeltaCondClv_atm          f8.2           /* Channel Adjusted CLV  - MMA/ATM */
+                @556 mmDeltaCondClv_mobile       f8.2           /* Channel Adjusted CLV  - MMA/Mobile */
+                                                                               
+                @571 secDeltaCondClv_Branch      f8.2           /* Channel Adjusted CLV  - Securities/Branch */
+                @586 secDeltaCondClv_online      f8.2           /* Channel Adjusted CLV  - Securities/Online */
+                @601 secDeltaCondClv_phone       f8.2           /* Channel Adjusted CLV  - Securities/Phone */
+                @616 secDeltaCondClv_atm         f8.2           /* Channel Adjusted CLV  - Securities/ATM */
+                @631 secDeltaCondClv_mobile      f8.2           /* Channel Adjusted CLV  - Securities/Mobile */
+                                                                              
+                @646 ilnDeltaCondClv_Branch      f8.2           /* Channel Adjusted CLV  - Installment Loan/Branch */
+                @661 ilnDeltaCondClv_online      f8.2           /* Channel Adjusted CLV  - Installment Loan/Online */
+                @676 ilnDeltaCondClv_phone       f8.2           /* Channel Adjusted CLV  - Installment Loan/Phone */
+                @691 ilnDeltaCondClv_atm         f8.2           /* Channel Adjusted CLV  - Installment Loan/ATM */
+                @706 ilnDeltaCondClv_mobile      f8.2           /* Channel Adjusted CLV  - Installment Loan/Mobile */
+             
+            ;
 hhid = hhidentifier;
 run;
 
 
 data virtual.models_20130220 (compress=binary);
 set virtual.models_20130220 ;
+mma_p = mmaScore/10000;
+sec_p = securityScore/10000;
+iln_p = instLoanScore/10000;
 run;
 
 proc contents data=virtual.models_20130220 varnum short;
@@ -432,4 +457,34 @@ where iln_rank ge 8 ;
 class Channel3 tran_code resp_iln;
 table Channel3 all, resp_iln="Inst. Loans"*n=''*f=COMMA12. / nocellmerge;
 format tran_code $transegm. resp_iln pcts. ;
+run;
+
+
+*look at Ps;
+proc format library=sas;
+value probs 0-<.1 = 'Up to 10%'
+	  0.1-<.2 = '10 to 20%'
+	  0.2-<.3 = '20 to 30%'
+	  0.3-<.4 = '30 to 40%'
+	  0.4-<.5 = '40 to 50%'
+	  0.5-<.6 = '50 to 60%'
+	  0.6-<.7 = '60 to 70%'
+	  0.7-<.8 = '70 to 70%'
+	  0.8-<.9 = '80 to 90%'
+	  0.9-<1 = '90 to 100%';
+run;
+
+
+data virtual.models_20130220 (compress=binary);
+merge virtual.models_20130220 (in=a) data.main_201303 (in=b keep=hhid hh);
+by hhid;
+if a;
+run;
+
+
+
+proc freq data=virtual.models_20130220;
+where hh = 1;
+table mma_p sec_p iln_p ;
+format mma_p sec_p iln_p probs.;
 run;

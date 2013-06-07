@@ -1,4 +1,4 @@
-libname snow 'C:\Documents and Settings\ewnym5s\My Documents\Snowbirds' ;
+libname snow 'C:\Documents and Settings\ewnym5s\My Documents\Analysis\Snowbirds' ;
 
 proc import file='C:\Documents and Settings\ewnym5s\My Documents\Snowbirds\Fl List.xlsx' out=snow.FL_data dbms=excel replace;
 run;
@@ -117,7 +117,20 @@ set snow.fl_data;
 full_address = catx("; ",title_line, address_1||address_2, catx(" ",catx(", ",city,state),zip));
 run;
 
+proc sort data=snow.fl_data;
+by cost_center  ;
+run;
 
+data snow.fl_data;
+merge snow.fl_data (in=a) snow.branch_details (in=b keep = cost_center market_name market_manager );
+by cost_center;
+if a;
+run;
+
+
+proc sort data=snow.fl_data;
+by countynm cost_center ;
+run;
 ods pdf file='C:\Documents and Settings\ewnym5s\My Documents\Snowbirds\Report.pdf';
 Title ;
 proc report data=snow.fl_data (obs=max) nowd split="";
@@ -143,3 +156,14 @@ break after phone / skip suppress;
 break before full_address / skip;
 run;
 quit;
+
+
+proc sort data=snow.fl_data;
+by countynm market_name ;
+run
+
+*create simple table for excel filter;
+proc print data=snow.fl_data;
+where cost_center not in (., 999);
+var countynm market_name market_manager cost_center brmanager email phone full_address flag_checking flag_CD Flag_InvestmentInsurance ixi_range; 
+run;
