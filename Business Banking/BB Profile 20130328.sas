@@ -12,7 +12,7 @@ prods1 = products;
 run;
 
 
-data bb.bbmain_201212;
+data bb.bbmain_201212 ;
 set bb.bbmain_201212;
 array nums{*} dda mms sav tda ira  mtg heqb heqc cln card boloc baloc cls mcc lckbx rcd wbb deb web_info;
 do i = 1 to dim(nums);

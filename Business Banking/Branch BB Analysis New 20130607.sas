@@ -68,16 +68,26 @@ by branch_id zip;
 if first.zip and not last.zip then delete;
 run;
 
+data  branch.BTA_20130607;
+length zip_match $ 5;
+set branch.BTA_20130607;
+zip_match = zip;
+run;
 
+proc sort data=branch.BTA_20130607;
+by zip_match;
+run;
 
-
+proc sort data=branch.bb_prospects;
+by zip;
+run;
 
 
 
 data branch.bb_opp_data;
-merge branch.BTAs (in=a) branch.bb_prospects (in=b) end=eof;
+merge branch.BTA_20130607 (in=a where=(zip ne . and zip ne 8065)) branch.bb_prospects (in=b rename=(zip=zip_match)) end=eof;
 retain miss miss1;
-by zip;
+by zip_match;
 if a then output;
 if a and not b then miss+1;
 if b and not a then miss1+1;
@@ -88,11 +98,11 @@ end;
 drop miss:;
 run;
 
-*Note of missing they were in florida so who cars, except 19717 in DElaware, looks like a country club ;
+
 
 *assign coordinates for zip centroid and for branch;
 proc sort data=branch.bb_opp_data;
-by branch zip;
+by branch_id zip_match;
 run;
 
 proc sort data=branch.Mtb_branches_201206;
@@ -101,38 +111,47 @@ run;
 
 
 data branch.bb_opp_data;
-merge  branch.bb_opp_data (in=a) branch.Mtb_branches_201206 (in=b keep=branch lat long statecode zip rename=(zip=br_zip statecode=br_state)) end=eof;;
+merge  branch.bb_opp_data (in=a) branch.Mtb_branches_201206 (in=b keep=branch lat long   rename=(branch=branch_id )) end=eof;;
 retain miss;
-by branch;
+by branch_id;
 if a then output;
 if a and not b then miss+1;
 if eof then put 'WARNING: a and not b =  ' miss;
+drop miss;
 run;
 
+
+*branches no lat/long;
+proc freq data=branch.bb_opp_data;
+where lat eq .;
+table branch_id;
+run;
+
+*I chekced many against Br. bible - all closed so I will drop them
 
 *get rid of junk;
 data branch.bb_opp_data;
 set branch.bb_opp_data;
-if branch eq . or lat eq . or long eq . or zip_num eq . then delete;
-format zip_num z5.;
+if branch_id eq . or lat eq . or long eq . or zip_match eq '' then delete;
 run;
 
 proc sql ;
-select count(unique(branch)) from branch.bb_opp_data;
+select count(unique(branch_id)) from branch.bb_opp_data;
 quit;
 
-* Ihave 547 Branches;
+* Ihave 655 Branches, souds ak to me;
+*but Heimback speaks about 704, the a file he sent says 680;
+* i will work with what I have;
 
-*get lat/long for zip code;
 
 proc sort data=branch.bb_opp_data;
-by zip_num;
+by zip;
 run;
 
 data  branch.bb_opp_data;
 retain miss;
-merge  branch.bb_opp_data(in=a) sashelp.zipcode (in=b keep=zip X Y rename=(zip=zip_num Y=zip_lat X=zip_long)) end=eof;
-by zip_num;
+merge  branch.bb_opp_data(in=a) sashelp.zipcode (in=b keep=zip X Y rename=( Y=zip_lat X=zip_long)) end=eof;
+by zip;
 if a then output;
 if a and not b then miss+1;
 if eof then put 'WARNING: a and not b =  ' miss;
@@ -163,7 +182,7 @@ input branch volume;
 run;
 
 proc sort data=branch.bb_opp_data;
-by branch;
+by branch_id;
 run;
 
 proc sort data=trans;
@@ -171,12 +190,123 @@ by branch;
 run;
 
 data branch.bb_opp_data ;
-merge branch.bb_opp_data (in=a) trans (in=b) end=eof;
+merge branch.bb_opp_data (in=a) trans (in=b rename=(branch=branch_id)) end=eof;
 retain miss;
-by branch;
+by branch_id;
 if a then output;
 if a and not b then miss+1;
 if eof then put 'WARNING: a and not b =  ' miss;
 drop miss;
+run;
+
+*I will use average for these, does nto feel right, but what else can I do;
+
+proc sql;
+select mean(volume) into :avgvol from trans;
+run;
+ 
+data branch.bb_opp_data;
+set branch.bb_opp_data;
+if volume eq . then do;
+	flag_volume = 1;
+	volume = &avgvol;
+end;
+run;
+
+
+*attractiveness of a branch vis a vis a zip is volume/(distance ^2);
+
+proc sort data=branch.bb_opp_data;
+by zip_match;
+run;
+
+
+
+proc sql;
+create table branch.bb_opp_data as 
+select a.*, b.sum_attr, divide(a.volume , a.distance**2) as attraction, ( calculated attraction/b.sum_attr) as weight 
+       from branch.bb_opp_data as a, 
+       (select c.zip_match, sum(c.volume/c.distance**2) as sum_attr from branch.bb_opp_data as c group by zip_match) as b
+	   where a.zip_match = b.zip_match;
+quit;
+
+
+proc print data= branch.bb_opp_data;
+where zip_match = '12601';
+var zip_match volume distance attraction sum_attr;
+sum attraction sum_attr weight;
+format volume  attraction sum_attr comma24. weight percent8.4 distance  comma12.6;
+run;
+*this sql query does all at once, saving you from calculating the attracytion, the summing it, the sorting to merge it back, then merging it and doing the division for weight;
+
+data test1;
+set branch.bb_opp_data;
+retain sum1;
+by zip_match;
+if first.zip_match then sum1=0;
+sum1+weight;
+if last.zip_match and (sum1 gt 1.001 or sum1 lt 0.999) then output;
+run;
+
+*Now I just need to sum by branch the scaled prospects;
+
+data branch.bb_opp_data;
+set branch.bb_opp_data;
+prospects_scaled = round(prospects*weight,1);
+targets_scaled = round(targets*weight,1);
+run;
+
+data test2;
+set branch.bb_opp_data;
+retain sum1 ;
+by zip_match;
+if first.zip_match then sum1=0;
+sum1+targets_scaled;
+diff = sum1 - targets;
+if last.zip_match and (diff ne 0) then output;
+run;
+
+* the rounding results in an acceptabe number 30 to45 errors, all 1s, and one 2;
+
+*sum by branch;
+
+proc sort data=branch.bb_opp_data;
+by branch_id;
+run;
+
+proc tabulate data=branch.bb_opp_data out=branch.bb_oppty_by_branch (drop = _:);
+class branch_id;
+var prospects_scaled targets_scaled;
+table branch_id,sum*(prospects_scaled='Total Prospects' targets_scaled='Target Prospects')*f=comma12.;
+run;
+
+*Now do the sum of bb hhlds by zip code the same way;
+
+data zips;
+length hhid $ 9 zip $ 5;
+infile 'C:\Documents and Settings\ewnym5s\My Documents\bb_zip.txt' dsd dlm='09'x lrecl=4096 firstobs=2;
+input hhid $ zip $;
+run;
+
+data bb.bbmain_201212  (compress=binary);
+merge bb.bbmain_201212 (in=left) zips (in=right) end=eof;
+retain miss;
+by hhid;
+if left then output;
+if left and not right then miss+1 ;
+if eof then put 'WARNING: A not in B = ' miss;
+drop miss;
+run;
+
+/*data bb.bbmain_201212  (compress=binary);*/
+/*set bb.bbmain_201212;*/
+/*hh = 1;*/
+/*run;*/
+
+
+proc tabulate data=bb.bbmain_201212 out=branch.bb_hhs (drop = _:);
+class zip;
+var hh;
+table zip, sum*hh;
 run;
 
