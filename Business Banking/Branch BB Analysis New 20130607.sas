@@ -180,26 +180,55 @@ data trans;
 infile myfile dsd dlm='09'x ;
 input branch volume;
 run;
+*new excel file with trans for 2012 from souders;
+libname  myxls EXCEL 'C:\Documents and Settings\ewnym5s\My Documents\Analysis\Network Planning\MarioSegal_BranchTransactions.xlsx';
+
+proc summary data=myxls.'Sheet1$'n;
+by branch;
+output out=trans(drop=_: rename=(branch=branch_id)) sum(totaltrx)=volume;
+run;
+
 
 proc sort data=branch.bb_opp_data;
 by branch_id;
 run;
 
 proc sort data=trans;
-by branch;
+by branch_id;
+run;
+
+data branch.bb_opp_data;
+set branch.bb_opp_data;
+volume = .;
+flag_volume = .;
 run;
 
 data branch.bb_opp_data ;
-merge branch.bb_opp_data (in=a) trans (in=b rename=(branch=branch_id)) end=eof;
+length rc 8;
+if 0 then set trans;
+if _N_ eq 1 then do;
+	dcl hash h(dataset:'trans');
+	h.definekey('branch_id');
+  	h.definedata('volume');
+	h.definedone();
+end;
+
+set branch.bb_opp_data end=eof;
 retain miss;
-by branch_id;
-if a then output;
-if a and not b then miss+1;
+rc=h.find();
+if rc ne 0 then do;
+	miss+1;
+	call missing(branch_id);
+	flag_volume = 1;
+end;
+
 if eof then put 'WARNING: a and not b =  ' miss;
 drop miss;
+drop rc;
 run;
 
 *I will use average for these, does nto feel right, but what else can I do;
+*not needed anymore;
 
 proc sql;
 select mean(volume) into :avgvol from trans;
@@ -213,11 +242,20 @@ if volume eq . then do;
 end;
 run;
 
+*clean up;
+data branch.bb_opp_data ;
+set  branch.bb_opp_data ;
+if branch_id eq . then delete;
+drop sum_attr attraction weight;
+run;
+
 
 *attractiveness of a branch vis a vis a zip is volume/(distance ^2);
 
 proc sort data=branch.bb_opp_data;
 by zip_match;
+run;
+
 run;
 
 
@@ -229,6 +267,7 @@ select a.*, b.sum_attr, divide(a.volume , a.distance**2) as attraction, ( calcul
        (select c.zip_match, sum(c.volume/c.distance**2) as sum_attr from branch.bb_opp_data as c group by zip_match) as b
 	   where a.zip_match = b.zip_match;
 quit;
+*this sql query does all at once, saving you from calculating the attracytion, the summing it, the sorting to merge it back, then merging it and doing the division for weight;
 
 
 proc print data= branch.bb_opp_data;
@@ -237,7 +276,6 @@ var zip_match volume distance attraction sum_attr;
 sum attraction sum_attr weight;
 format volume  attraction sum_attr comma24. weight percent8.4 distance  comma12.6;
 run;
-*this sql query does all at once, saving you from calculating the attracytion, the summing it, the sorting to merge it back, then merging it and doing the division for weight;
 
 data test1;
 set branch.bb_opp_data;
@@ -247,6 +285,7 @@ if first.zip_match then sum1=0;
 sum1+weight;
 if last.zip_match and (sum1 gt 1.001 or sum1 lt 0.999) then output;
 run;
+*this will output records if by zip it added to much different than 100%;
 
 *Now I just need to sum by branch the scaled prospects;
 
@@ -255,6 +294,7 @@ set branch.bb_opp_data;
 prospects_scaled = round(prospects*weight,1);
 targets_scaled = round(targets*weight,1);
 run;
+*I rounded the prospects;
 
 data test2;
 set branch.bb_opp_data;
@@ -266,7 +306,7 @@ diff = sum1 - targets;
 if last.zip_match and (diff ne 0) then output;
 run;
 
-* the rounding results in an acceptabe number 30 to45 errors, all 1s, and one 2;
+* the rounding results in an acceptabe number 30 to 45 errors, all are 1s, and one 2;
 
 *sum by branch;
 
@@ -280,33 +320,201 @@ var prospects_scaled targets_scaled;
 table branch_id,sum*(prospects_scaled='Total Prospects' targets_scaled='Target Prospects')*f=comma12.;
 run;
 
-*Now do the sum of bb hhlds by zip code the same way;
+*###################################################################################################################;
+*############       Now do the sum of bb hhlds by zip code the same way     ########################################;
+*###################################################################################################################;
 
-data zips;
-length hhid $ 9 zip $ 5;
-infile 'C:\Documents and Settings\ewnym5s\My Documents\bb_zip.txt' dsd dlm='09'x lrecl=4096 firstobs=2;
-input hhid $ zip $;
-run;
-
-data bb.bbmain_201212  (compress=binary);
-merge bb.bbmain_201212 (in=left) zips (in=right) end=eof;
-retain miss;
-by hhid;
-if left then output;
-if left and not right then miss+1 ;
-if eof then put 'WARNING: A not in B = ' miss;
-drop miss;
-run;
+/*data zips;*/
+/*length hhid $ 9 zip $ 5;*/
+/*infile 'C:\Documents and Settings\ewnym5s\My Documents\bb_zip.txt' dsd dlm='09'x lrecl=4096 firstobs=2;*/
+/*input hhid $ zip $;*/
+/*run;*/
+/**/
+/*data bb.bbmain_201212  (compress=binary);*/
+/*merge bb.bbmain_201212 (in=left) zips (in=right) end=eof;*/
+/*retain miss;*/
+/*by hhid;*/
+/*if left then output;*/
+/*if left and not right then miss+1 ;*/
+/*if eof then put 'WARNING: A not in B = ' miss;*/
+/*drop miss;*/
+/*run;*/
 
 /*data bb.bbmain_201212  (compress=binary);*/
 /*set bb.bbmain_201212;*/
 /*hh = 1;*/
 /*run;*/
 
+*hew wants all the product coutns and such, I need to collect that;
+*rm in this dataset cointains top 40;
 
-proc tabulate data=bb.bbmain_201212 out=branch.bb_hhs (drop = _:);
+proc tabulate data=bb.bbmain_201212 out=internal (drop = _:);
 class zip;
-var hh;
-table zip, sum*hh;
+var hh dda: mms: sav: tda: cln: boloc: baloc: cls: wbb: deb: rm con ;
+table zip, sum*(hh dda: mms: sav: tda: cln: boloc: baloc: cls: wbb: deb: rm con);
 run;
 
+
+%null_to_zero(source=internal,destination=internal)
+
+
+*assign to BTAs;
+data branch.bb_mtb_data (drop=zip);
+merge branch.BTA_20130607 (in=a keep = zip zip_match branch_id where=(zip ne . and zip ne 8065)) internal (in=b rename=(zip=zip_match )) end=eof;
+retain miss miss1;
+by zip_match;
+if a then output;
+if a and not b then miss+1;
+if b and not a then miss1+1;
+if eof then do;
+	put 'WARNING: a and not b =  ' miss;
+	put 'WARNING: b and not a =  ' miss1;
+end;
+drop miss:;
+run;
+
+*merge back with the opp_data;
+proc sort data=branch.bb_opp_data;
+by zip_match branch_id;
+run;
+
+proc sort data=branch.bb_mtb_data;
+by zip_match branch_id;
+run;
+
+data  branch.bb_opp_data;
+merge branch.bb_opp_data(in=a) branch.bb_mtb_data(in=b);
+by zip_match branch_id;
+if a;
+run;
+
+
+*now scale all the variables numbers 30-57;
+%macro scale(dataset=,start=,stop=);
+
+data temp_table;
+set &dataset;
+run;
+
+%LET ds=%SYSFUNC(OPEN(temp_table,i));
+data &dataset;
+set &dataset;
+%do i = &start %to &stop;
+	%let name=%SYSFUNC(VARNAME(&ds,&i));	
+	&name._scaled = round(&name. * weight,1);
+%end;
+%let rc=%SYSFUNC(CLOSE(&ds));
+run;
+%mend scale;
+
+
+filename mprint "C:\Documents and Settings\ewnym5s\My Documents\SAS\scale_test.sas" ;
+data _null_ ; file mprint ; run ;
+options mprint mfile nomlogic mexecnote;
+
+%scale(dataset=branch.bb_opp_data,start=29,stop=57)
+;
+
+
+
+
+
+
+*now just do the tabulate;
+proc contents data=branch.bb_opp_data varnum short;
+run;
+
+
+proc tabulate data=branch.bb_opp_data out=branch.bb_oppty_by_branch_final (drop = _:);
+class branch_id;
+var prospects_scaled targets_scaled dda_scaled dda_amt_scaled DDA_con_scaled mms_scaled mms_amt_scaled MMS_con_scaled sav_scaled 
+    sav_amt_scaled sav_con_scaled tda_scaled tda_amt_scaled TDA_con_scaled cln_scaled cln_amt_scaled CLN_con_scaled boloc_scaled 
+    boloc_amt_scaled BOLoc_con_scaled baloc_scaled baloc_amt_scaled BALOC_con_scaled cls_scaled cls_amt_scaled CLS_con_scaled wbb_scaled 
+    deb_scaled RM_scaled con_scaled hh_scaled ;
+table branch_id,sum*(prospects_scaled targets_scaled dda_scaled dda_amt_scaled DDA_con_scaled mms_scaled mms_amt_scaled MMS_con_scaled sav_scaled 
+    sav_amt_scaled sav_con_scaled tda_scaled tda_amt_scaled TDA_con_scaled cln_scaled cln_amt_scaled CLN_con_scaled boloc_scaled 
+    boloc_amt_scaled BOLoc_con_scaled baloc_scaled baloc_amt_scaled BALOC_con_scaled cls_scaled cls_amt_scaled CLS_con_scaled wbb_scaled 
+    deb_scaled RM_scaled con_scaled hh_scaled )*f=comma24.;
+run;
+
+proc sort data=branch.Bta_20130607;
+by branch_id;
+run;
+
+data extra;
+set branch.Bta_20130607;
+by branch_id;
+if first.branch_id then output;
+run;
+
+
+data branch.bb_oppty_by_branch_final;
+merge extra (in=b drop=zip:) branch.bb_oppty_by_branch_final (in=a) ;
+by branch_id;
+if a then output;
+run;
+
+proc contents data=branch.bb_oppty_by_branch_final varnum short;
+run;
+
+
+proc print data=branch.bb_oppty_by_branch_final;
+sum prospects_scaled_Sum targets_scaled_Sum dda_scaled_Sum dda_amt_scaled_Sum DDA_con_scaled_Sum mms_scaled_Sum mms_amt_scaled_Sum MMS_con_scaled_Sum 
+    sav_scaled_Sum sav_amt_scaled_Sum sav_con_scaled_Sum tda_scaled_Sum tda_amt_scaled_Sum TDA_con_scaled_Sum cln_scaled_Sum cln_amt_scaled_Sum CLN_con_scaled_Sum 
+     boloc_scaled_Sum boloc_amt_scaled_Sum BOLoc_con_scaled_Sum baloc_scaled_Sum baloc_amt_scaled_Sum BALOC_con_scaled_Sum cls_scaled_Sum cls_amt_scaled_Sum 
+     CLS_con_scaled_Sum wbb_scaled_Sum deb_scaled_Sum RM_scaled_Sum con_scaled_Sum hh_scaled_Sum;
+var Branch_ID Urban_Type Br_Zip Br_lat Br_long Radius;
+run;
+ 
+proc freq data=branch.bb_opp_data;
+table zip_match / out=zips;
+run;
+
+
+proc sql noprint ;
+/* select sum(a.hh) from bb.bbmain_201212 as a, zips as b where a.zip = b.zip_match;*/
+/* select a.state, sum(a.hh) from bb.bbmain_201212 as a  LEFT OUTER JOIN zips as b on a.zip = b.zip_match  where b.zip_match is null group by a.state;*/
+ create table DE as select a.state, a.zip, sum(a.hh) as hh1 from bb.bbmain_201212 as a  LEFT OUTER JOIN zips as b on a.zip = b.zip_match  where b.zip_match is null and a.state="DE" group by a.state, a.zip order by calculated hh1 descending;
+ create table NY as select a.state, a.zip, sum(a.hh) as hh1 from bb.bbmain_201212 as a  LEFT OUTER JOIN zips as b on a.zip = b.zip_match  where b.zip_match is null and a.state="NY" group by a.state, a.zip order by calculated hh1  descending;
+create table PA as select a.state, a.zip, sum(a.hh) as hh1 from bb.bbmain_201212 as a  LEFT OUTER JOIN zips as b on a.zip = b.zip_match  where b.zip_match is null and a.state="PA" group by a.state, a.zip order by calculated hh1 descending;
+ create table MD as select a.state, a.zip, sum(a.hh) as hh1 from bb.bbmain_201212 as a  LEFT OUTER JOIN zips as b on a.zip = b.zip_match  where b.zip_match is null and a.state="MD" group by a.state, a.zip order by calculated hh1  descending;
+quit;
+
+PROC MAPIMPORT OUT=sas.us_zips DATAFILE="C:\Documents and Settings\ewnym5s\Desktop\tl_2010_us_zcta510.shp";
+run;
+
+data sas.us_zips;
+length zip 5;
+set sas.us_zips ;
+zip=ZCTA5CE10;
+state = zipstate(ZCTA5CE10);
+format zip z5.;
+run;
+
+data de ;
+length zip 5;
+set de (rename=(zip=zip_char));
+zip = zip_char;
+format zip z5.;
+run;
+
+proc gmap map=sas.us_zips (where=(state="DE")) data=DE;
+id zip;
+choro hh1;
+run;
+quit;
+
+data NY ;
+length zip 5;
+set NY (rename=(zip=zip_char));
+zip = zip_char;
+format zip z5.;
+run;
+
+proc gmap map=sas.us_zips (where=(state="NY")) data=NY;
+id zip;
+choro hh1;
+run;
+quit;
+
+*maps work, cool but I need to look if I missed tyhings we should not have;
