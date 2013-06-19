@@ -1,5 +1,5 @@
 data s1;
-set bb.bbmain_201212 (obs=1000);
+set bb.bbmain_201212 (obs=max);
 
 	if svcs <3.5 then do;
 	if cb_dist <0.13 then do;
