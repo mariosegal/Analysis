@@ -95,7 +95,7 @@ proc export data=cross outfile='C:\Documents and Settings\ewnym5s\My Documents\S
 run;
 
 *add emails;
-proc import file='C:\Documents and Settings\ewnym5s\My Documents\Snowbirds\email.xlsx' out=email dbms=excel replace;
+proc import file='C:\Documents and Settings\ewnym5s\My Documents\Analysis\Snowbirds\email.xlsx' out=email dbms=excel replace;
 run;
 
 data snow.fl_data;
@@ -175,9 +175,19 @@ run;
 proc contents data=snow.fl_data varnum short;
 run;
 
+proc sort data=snow.fl_data;
+by id;
+run;
+
+data snow.fl_data;
+merge snow.fl_data (in=a) look1(in=b rename=(weekly=ID));
+by ID;
+if a;
+run;
+
+
 data snow.FL_Data_Updated;
-set snow.fl_data ( keep =zip_num ID Title_Line Address_1 Address_2 City State Zip   Email_Address );
-rename ID = hhid;
+set snow.fl_data ( keep =cost_center zip_num ID hhid Title_Line Address_1 Address_2 City State Zip   Email_Address );
 run;
 
 proc sort data=snow.FL_Data_Updated;
@@ -190,25 +200,126 @@ by hhid;
 if a;
 run;
 
-proc freq data=snow.FL_Data_Updated;
-where dda eq .;
+data snow.FL_Data_Updated;
+length br_num 5;
+set  snow.FL_Data_Updated;
+flag= 0;
+if  hhid ne '' and dda ne . then flag=1;
+br_num=branch;
 run;
 
-*I am missing too many, so I need to match to datamart;
-*do file for kathe;
+data branches;
+set branch.Mtb_branches_201206 ;
+keep branch type branch_flag;
+rename branch = br_num;
+branch_flag = 1;
+run;
 
-data _null_;
-set snow.FL_Data_Updated;
-file 'C:\Documents and Settings\ewnym5s\My Documents\Analysis\Snowbirds\snowbirds.txt' dsd dlm='09'x;
-put hhid;
+proc sort data=snow.FL_Data_Updated;
+by br_num ;
+run;
+
+data snow.FL_Data_Updated;
+merge  snow.FL_Data_Updated (in=a) branches(in=b);
+by br_num;
+if a;
 run;
 
 
+proc freq data=snow.FL_Data_Updated order=freq;
+where type eq '';
+table br_num;
+run;
 
-proc freq data=snow.fl_data;
-where branch_domiciled eq '00999';
-table flag: commercial: business:;
+proc sql;
+select count(*) from snow.FL_Data_Updated where hhid eq '';
+select count(*) from snow.FL_Data_Updated where hhid ne '' and dda eq .;
+quit;
+
+*Overall of 2,958 I had no monthly for 272, plus for 59 I did have one but not on my consumer dataset = 2948-272-59=2617;
+
+/*data _null_;*/
+/*set snow.FL_Data_Updated;*/
+/*file 'C:\Documents and Settings\ewnym5s\My Documents\Analysis\Snowbirds\snowbirds.txt' dsd dlm='09'x;*/
+/*put hhid;*/
+/*run;*/
+/**/
+/**/
+
+
+proc freq data=snow.FL_Data_Updated order=freq;
+where flag=1;
+table branch;
 run;
 
 
+proc tabulate data=snow.FL_Data_Updated missing;
+where hhid ne '' and (hhid ne '' and dda ne .);
+class type state ixi_tot cbr;
+var hh dda mms sav tda ira sec mtg heq iln ind card dda_amt mms_amt sav_amt tda_amt ira_amt sec_amt mtg_amt heq_amt iln_amt ind_amt ccs_amt ;
+table type all, sum*(hh dda mms sav tda ira sec mtg heq iln ind card)*f=comma12. 
+            rowpctsum<hh>*(dda mms sav tda ira sec mtg heq iln ind card)*f=pctfmt. / nocellmerge misstext='0';
+table type all, sum*(dda_amt mms_amt sav_amt tda_amt ira_amt sec_amt mtg_amt heq_amt iln_amt ind_amt ccs_amt)*f=dollar24. / nocellmerge misstext='0';
+table type all, (dda_amt*rowpctsum<dda> mms_amt*rowpctsum<mms> sav_amt*rowpctsum<sav> tda_amt*rowpctsum<tda> ira_amt*rowpctsum<ira> 
+             sec_amt*rowpctsum<sec> mtg_amt*rowpctsum<mtg> heq_amt*rowpctsum<heq> iln_amt*rowpctsum<iln> ind_amt*rowpctsum<ind> ccs_amt*rowpctsum<card>)*f=pctdoll.
+             / nocellmerge misstext='0';
+table state all, type/ nocellmerge misstext='0';
+table type all, (ixi_tot all)*N*f=comma12. / nocellmerge misstext='0';
+table type all, cbr;
+format ixi_tot wltamt. cbr cbr2012fmt.;
+run;
+
+
+*prepare data for file;
+data snow.Fl_data_updated;
+retain miss;
+merge snow.Fl_data_updated (in=a) 
+      snow.branch_details (in=b keep=cost_center branch_name branch_manager External_Phone Latitude Longitude regional_manager region_name market_name market_manager
+                           rename=(cost_center=br_num)) 
+      email (in=c keep=branch_no email rename=(branch_no=br_num)) end=eof;
+by br_num;
+if a and  not b then miss+1;
+if eof then put 'A not in B = ' miss;
+if a;
+drop miss and;
+run;
+
+
+proc format ;
+value $ type 'Branch' = 'Branch'
+             'Instore' = 'Branch'
+			 'College' = 'Branch'
+			 'BBC' = 'Branch'
+			 'Retirement' = 'Branch'
+			 other = 'Non Branch';
+
+run;
+
+proc freq data=snow.Fl_data_updated;
+where hhid ne '' and (hhid ne '' and dda ne .);
+table type / missing;
+format type $type.;
+run;
+
+proc contents data=snow.Fl_data_updated varnum short;
+ run;
+
+
+ data temp;
+ set snow.Fl_data_updated(where=(hhid ne '' and (hhid ne '' and dda ne .))
+           keep =hhid br_num Title_Line Address_1 Address_2 City State Zip Email_Address dda mms sav tda ira sec trs mtg heq card ILN  ins
+           DDA_Amt MMS_amt sav_amt TDA_Amt IRA_amt sec_Amt trs_amt MTG_amt HEQ_Amt ccs_Amt iln_amt  IXI_tot segment clv_total tenure_yr  type
+           Branch_Name Branch_Manager External_Phone  Region_Name Regional_Manager Market_Name Market_Manager email);
+format segment segfmt. ixi_tot wltamt. dda mms sav tda ira sec trs mtg heq card ILN  ins binary_flag. type $type. 
+       DDA_Amt MMS_amt sav_amt TDA_Amt IRA_amt sec_Amt trs_amt MTG_amt HEQ_Amt ccs_Amt iln_amt clv_total dollar24. tenure_yr comma6.1;
+run;
+
+
+proc export 
+    data = temp outfile='C:\Documents and Settings\ewnym5s\My Documents\Analysis\Snowbirds\test.xlsx' dbms=excel replace;
+run;
+
+
+proc print data= temp noobs;
+run;
 

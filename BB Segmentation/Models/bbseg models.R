@@ -42,7 +42,7 @@ Underserved","Content & Well Served","Complex & Extended Mgmt."  ,"Sophisticated
 dev.off()
 
 
-#I do not see anything, but so I di dnot in the samsung training and Princ comp worked great;
+
 train$segment <- factor(train$segment,levels=c(1,2,3,4,5,6),labels=c("Simple & Stable","Successful Service-Dependent","Stable 
 Underserved","Content & Well Served","Complex & Extended Mgmt."  ,"Sophisticated & Demanding"))
 
@@ -546,6 +546,8 @@ for (i in 1:6) {
   panel_data <- rbind(panel_data,temp_frame)
 }
 
+
+tree_1a <- ctree(s1 ~ ., data = vdata)
 
 summary <- rbind(treeStats(tree_table_1),treeStats(tree_table_2),treeStats(tree_table_3),treeStats(tree_table_4),treeStats(tree_table_5),treeStats(tree_table_6))
 row.names(summary) <- seg_names1

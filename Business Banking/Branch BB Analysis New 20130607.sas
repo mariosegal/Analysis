@@ -23,13 +23,13 @@ rename __Prospects=prospects Avg___Emp=avg_emp __TS=TS __Emp=Employees __TS0=tar
 run;
 
 *Merge with BTAs, using zip as key;
-libname bta   'C:\Documents and Settings\ewnym5s\My Documents\Analysis\Network Planning\BTA 20130607.xlsx';
+libname bta   'C:\Documents and Settings\ewnym5s\My Documents\Analysis\Network Planning\BB_BTA_20130613.xls';
 
 data branch.BTA_20130607;
-set bta.'bta$'n;
+set bta.'BB_BTA_20130613$'n;
 run;
 
-libname radii 'C:\Documents and Settings\ewnym5s\My Documents\Analysis\Network Planning\Radii for BTA Analysis - 20130607.xlsx';
+libname radii 'C:\Documents and Settings\ewnym5s\My Documents\Analysis\Network Planning\Radii BB Analysis Full 20130613.xlsx';
 
 *merge with braches to define if some did not pick any zips;
 
@@ -41,19 +41,19 @@ libname radii 'C:\Documents and Settings\ewnym5s\My Documents\Analysis\Network P
 
 *140 did, so instead, I will add to the bottom the  radii file, with some renaming that will add the branch zxip to the BTA, then I wil dedupe by branch/zip in case it was there;
 
-data  branch.BTA_20130607;
-merge branch.BTA_20130607 (in=a) radii.data (in=b);
-by branch_id;
-if a ;
-run;
+/*data  branch.BTA_20130607;*/
+/*merge branch.BTA_20130607 (in=a) radii.'Sheet1$'n (in=b);*/
+/*by branch_id;*/
+/*if a ;*/
+/*run;*/
 
 data  branch.BTA_20130607;
-set branch.BTA_20130607  radii.data ;
+set branch.BTA_20130607  radii.'Sheet1$'n;
 run;
 
 data  branch.BTA_20130607;
 set branch.BTA_20130607;
-if zip eq . then zip = br_zip;
+if zip eq '' then zip = br_zip;
 run;
 
 
@@ -85,7 +85,7 @@ run;
 
 
 data branch.bb_opp_data;
-merge branch.BTA_20130607 (in=a where=(zip ne . and zip ne 8065)) branch.bb_prospects (in=b rename=(zip=zip_match)) end=eof;
+merge branch.BTA_20130607 (in=a where=(zip ne '' and zip ne '8065')) branch.bb_prospects (in=b rename=(zip=zip_match)) end=eof;
 retain miss miss1;
 by zip_match;
 if a then output;
@@ -98,7 +98,18 @@ end;
 drop miss:;
 run;
 
+data branch.bb_opp_data;
+set branch.bb_opp_data;
+drop zip;
+*Ineed a numeric one named zip, I somehow had it as $;
+run;
 
+data branch.bb_opp_data;
+length zip 5;
+set branch.bb_opp_data;
+zip = zip_match;
+format zip z5.;
+run;
 
 *assign coordinates for zip centroid and for branch;
 proc sort data=branch.bb_opp_data;
@@ -172,7 +183,7 @@ proc sort data=branch.bb_opp_data;
 by descending distance;
 run;
 
-*mas distance is 12 miles, I checkedf and it seems to a very large zip code, so centroid could legitimate could be far, N-S it was 12 or more miles;
+*max distance is 12 miles, I checkedf and it seems to a very large zip code, so centroid could legitimate could be far, N-S it was 12 or more miles;
 * checked another at 10 miles and it was one of those split zip codes, nothing I can do about that;
 
 filename myfile 'C:\Documents and Settings\ewnym5s\My Documents\Analysis\Network Planning\transactions by branch.txt';
@@ -306,7 +317,7 @@ diff = sum1 - targets;
 if last.zip_match and (diff ne 0) then output;
 run;
 
-* the rounding results in an acceptabe number 30 to 45 errors, all are 1s, and one 2;
+* the rounding results in an acceptabe number of 45 errors, all are 1s, ;
 
 *sum by branch;
 
@@ -345,10 +356,17 @@ run;
 /*hh = 1;*/
 /*run;*/
 
-*hew wants all the product coutns and such, I need to collect that;
+*he wants all the product coutns and such, I need to collect that;
 *rm in this dataset cointains top 40;
 
-proc tabulate data=bb.bbmain_201212 out=internal (drop = _:);
+data tem_bb_data;
+set bb.bbmain_201212;
+keep hh dda: mms: sav: tda: cln: boloc: baloc: cls: wbb: deb: rm con zip;
+run;
+
+%as_logical(source=tem_bb_data,destination=tem_bb_data,variables=dda mms sav tda cln boloc baloc cls wbb deb rm con);
+
+proc tabulate data=tem_bb_data out=internal (drop = _:);
 class zip;
 var hh dda: mms: sav: tda: cln: boloc: baloc: cls: wbb: deb: rm con ;
 table zip, sum*(hh dda: mms: sav: tda: cln: boloc: baloc: cls: wbb: deb: rm con);
@@ -357,10 +375,11 @@ run;
 
 %null_to_zero(source=internal,destination=internal)
 
+%replacesuffix(WORK,internal,2,30,_sum,);;
 
 *assign to BTAs;
 data branch.bb_mtb_data (drop=zip);
-merge branch.BTA_20130607 (in=a keep = zip zip_match branch_id where=(zip ne . and zip ne 8065)) internal (in=b rename=(zip=zip_match )) end=eof;
+merge branch.BTA_20130607 (in=a keep = zip_match branch_id where=(zip_match ne '' and zip_match ne '8065')) internal (in=b rename=(zip=zip_match )) end=eof;
 retain miss miss1;
 by zip_match;
 if a then output;
@@ -389,7 +408,11 @@ if a;
 run;
 
 
-*now scale all the variables numbers 30-57;
+
+
+proc contents data=branch.bb_opp_data varnum ; run;
+
+
 %macro scale(dataset=,start=,stop=);
 
 data temp_table;
@@ -414,10 +437,6 @@ options mprint mfile nomlogic mexecnote;
 
 %scale(dataset=branch.bb_opp_data,start=29,stop=57)
 ;
-
-
-
-
 
 
 *now just do the tabulate;
@@ -480,6 +499,65 @@ create table PA as select a.state, a.zip, sum(a.hh) as hh1 from bb.bbmain_201212
  create table MD as select a.state, a.zip, sum(a.hh) as hh1 from bb.bbmain_201212 as a  LEFT OUTER JOIN zips as b on a.zip = b.zip_match  where b.zip_match is null and a.state="MD" group by a.state, a.zip order by calculated hh1  descending;
 quit;
 
+data zips;
+set zips;
+bta = 1;
+run;
+
+data temp_map;
+if 0 then set zips (rename=(zip_match=zip));
+if _N_ eq 1 then do;
+	dcl hash h(dataset:'zips (rename=(zip_match=zip))');
+	h.definekey('zip');
+  	h.definedata('bta');
+	h.definedone();
+end;
+
+set bb.bbmain_201212 (keep= zip state hh hhid cb_dist dda mms sav cln cls baloc boloc cb_dist state) ;
+rc=h.find();
+if rc ne 0 then bta=0;
+drop rc;
+run;
+
+
+proc freq data=temp_map;
+table bta;
+run;
+
+
+%as_logical(source=temp_map,destination=temp_map,variables=dda mms sav cln cls baloc boloc);
+
+proc tabulate data=temp_map;
+class bta;
+var dda mms sav cln cls baloc boloc cb_dist hh;
+table bta="In BTA", sum=" "*hh='HHs'*f=comma12. pctsum<hh>='Penetration'*(dda mms sav cln cls baloc boloc)*f=pctfmt. /nocellmerge;
+format bta binary_flag.;
+run;
+
+proc freq data=temp_map order=freq;
+where bta eq 0;
+table state;
+run;
+
+proc gmap map=sas.us_zips (where=(state in("NY","DE","MD","VA","DC","WV","PA"))) data=temp_map (rename=(zip=zip_char) );
+id zip_char;
+choro bta / discrete statistic=first ;
+run;
+quit;
+
+ods html close;
+proc tabulate data=temp_map out=bta_check;
+class zip bta;
+table zip*bta;
+run;
+ods html;
+
+
+proc export data=bta_check(keep=bta zip N) outfile='C:\Documents and Settings\ewnym5s\My Documents\Analysis\Network Planning\bta_check.xls' 
+             dbms=excel replace;
+run;
+
+
 PROC MAPIMPORT OUT=sas.us_zips DATAFILE="C:\Documents and Settings\ewnym5s\Desktop\tl_2010_us_zcta510.shp";
 run;
 
@@ -513,8 +591,9 @@ run;
 
 proc gmap map=sas.us_zips (where=(state="NY")) data=NY;
 id zip;
-choro hh1;
+choro hh1 / ;
 run;
 quit;
 
 *maps work, cool but I need to look if I missed tyhings we should not have;
+

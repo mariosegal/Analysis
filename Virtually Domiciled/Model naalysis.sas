@@ -45,7 +45,7 @@ format mmap_p percent 6.1;
 run;
 
 *repeat for sec and also ilm;
-%let var = iln;
+%let var = mma;
 
 data &var;
 set virtual.models_20130220;
@@ -113,7 +113,23 @@ value quintiles 1 = 1
 				5 = 5;
 run;
 
+filename mprint "C:\Documents and Settings\ewnym5s\My Documents\SAS\iln_profiles.sas" ;
+data _null_ ; file mprint ; run ;
+options mprint mfile nomlogic ;
+
 %create_report(class1 = mma_quintile, fmt1 = quintiles,out_dir = C:\Documents and Settings\ewnym5s\My Documents\Analysis\Virtually Domiciled, 
-                main_source = data.main_201303,  contrib_source = data.contrib_201303, condition = dda eq 1 and mma_quintile ne ge 1,
+                main_source = data.main_201303,  contrib_source = data.contrib_201303, condition = dda eq 1 and mma_quintile ne .,
                 out_file=mma_prospects,
                 logo_file= C:\Documents and Settings\ewnym5s\My Documents\Administrative\Tools\logo.png)
+
+%create_report(class1 = inv_quintile, fmt1 = quintiles,out_dir = C:\Documents and Settings\ewnym5s\My Documents\Analysis\Virtually Domiciled, 
+                main_source = data.main_201303,  contrib_source = data.contrib_201303, condition = dda eq 1 and inv_quintile ne .,
+                out_file=sec_prospects,
+                logo_file= C:\Documents and Settings\ewnym5s\My Documents\Administrative\Tools\logo.png)
+
+%create_report(class1 = loan_quintile, fmt1 = quintiles,out_dir = C:\Documents and Settings\ewnym5s\My Documents\Analysis\Virtually Domiciled, 
+                main_source = data.main_201303,  contrib_source = data.contrib_201303, condition = dda eq 1 and loan_quintile ne .,
+                out_file=iln_prospects,
+                logo_file= C:\Documents and Settings\ewnym5s\My Documents\Administrative\Tools\logo.png)
+
+

@@ -1,11 +1,15 @@
+LIBNAME ixi_new ODBC DSN=IXI user=reporting_user pw=Reporting2 schema=dbo;
+LIBNAME IXI 'C:\Documents and Settings\ewnym5s\My Documents\Analysis\IXI';;
+%let Cycle=201206;
+
 data temp_hh;
 length rc 8 ;
-if 0 then set IXi.CBR_BY_ZIP_2012(keep=ZIP CBR  rename=(cbr=cbr_zip) );
+if 0 then set IXi.CBR_BY_ZIP_2012(keep=ZIP CBR_num  );
 
 if _n_ eq 1 then do;
-	dcl hash h(dataset:'IXi.CBR_BY_ZIP_2012(keep=ZIP CBR rename=(cbr=cbr_zip))');
+	dcl hash h(dataset:'IXi.CBR_BY_ZIP_2012(keep=ZIP CBR_num)');
     h.definekey('zip');
-	h.definedata('cbr_zip');
+	h.definedata('cbr_num');
 	h.definedone();
 end;
 
@@ -14,7 +18,7 @@ retain miss;
 
 rc = h.find();
 if rc ne 0 then do ;
-	cbr_zip = '99';
+	cbr_num = '99';
 	miss+1;
 end;
 
@@ -22,7 +26,6 @@ ixi_dep= sum(ixi_non_int_chk, ixi_int_chk,ixi_savings, ixi_mms, ixi_tda);
 ixi_inv = ixi_tot-ixi_dep;
 mtb_dep = sum(dda_amt, sav_amt, tda_amt, ira_amt,mms_amt);
 mtb_tot = sum(mtb_dep, sec_amt);
-cbr_num = input(cbr_zip,2.);
 if eof then put 'WARNING: Records in A not B = ' miss;
 drop miss rc;
 run;

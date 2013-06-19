@@ -1,5 +1,7 @@
 
 LIBNAME ixi_new ODBC DSN=IXI user=reporting_user pw=Reporting2 schema=dbo;
+LIBNAME IXI 'C:\Documents and Settings\ewnym5s\My Documents\Analysis\IXI';;
+
 	 %let Cycle=201206;
 
 	 
