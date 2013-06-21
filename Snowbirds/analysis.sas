@@ -306,7 +306,7 @@ proc contents data=snow.Fl_data_updated varnum short;
 
 
  data temp;
- set snow.Fl_data_updated(where=(hhid ne '' and (hhid ne '' and dda ne .))
+ merge snow.Fl_data_updated(where=(hhid ne '' and (hhid ne '' and dda ne .))
            keep =hhid br_num Title_Line Address_1 Address_2 City State Zip Email_Address dda mms sav tda ira sec trs mtg heq card ILN  ins
            DDA_Amt MMS_amt sav_amt TDA_Amt IRA_amt sec_Amt trs_amt MTG_amt HEQ_Amt ccs_Amt iln_amt  IXI_tot segment clv_total tenure_yr  type
            Branch_Name Branch_Manager External_Phone  Region_Name Regional_Manager Market_Name Market_Manager email);
@@ -322,4 +322,28 @@ run;
 
 proc print data= temp noobs;
 run;
+
+data cnty;
+length zip_num 5;
+set snow.Fl_data_updated ;
+keep  zip zip_char zip_num;
+rename zip = zip_char;
+zip_num = zip;
+format zip_num z5.;
+run;
+
+proc sort data=cnty nodupkey;
+by zip_num;
+run;
+
+data cnty;
+merge cnty (in=a keep=zip_num rename=(zip_num=zip)) sashelp.zipcode(in=b keep=zip countynm);
+by zip;
+if a;
+
+run;
+ 
+proc print data= cnty;
+run;
+
 

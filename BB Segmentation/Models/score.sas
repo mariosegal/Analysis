@@ -79,6 +79,14 @@ hh=1;
 if left;
 run;
 
+
+data bb.bbmain_201212 (compress=binary);
+merge bb.bbmain_201212 (in=left) bbseg (in=right );
+by hhid;
+if left;
+run;
+
+
 proc format library=sas;
 value bbseg (notsorted)
             1 = 'Simple & Stable'
@@ -92,16 +100,15 @@ run;
 
 
 proc tabulate data=bb.bbmain_201212 order=data;
-class bbseg /preloadfmt;
+class bbseg_all /preloadfmt;
 var dda: mms: sav: tda: mtg: cln: cls: baloc: boloc: heqb: hh
     vpos_num mpos_num vpos_amt mpos_amt deptkt curdep_num curdep_amt chkpd 
     ACH rcd_num winfo_num lckbox top40 RM cb_dist cv0 cr6 com_dda br_tran_num br_tran_amt vru_num nsf chks_dep cash_mgmt wire_in wire_out  ;
-table bbseg='BB Segment' all, N='HHs'*(hh dda mms sav tda mtg cln cls baloc boloc heqb)*f=comma12. / nocellmerge misstext='0';
-table bbseg='BB Segment' all, rowpctsum<hh>='Penetration'*(dda mms sav tda mtg cln cls baloc boloc heqb)*f=pctfmt. / nocellmerge misstext='0%';
-table bbseg='BB Segment' all, (dda_amt*rowpctsum<dda> mms_amt*rowpctsum<mms> sav_amt*rowpctsum<sav> tda_amt*rowpctsum<tda> mtg_amt*rowpctsum<mtg> 
+table bbseg_all='BB Segment' all, N='HHs'*(hh dda mms sav tda mtg cln cls baloc boloc heqb)*f=comma12. / nocellmerge misstext='0';
+table bbseg_all='BB Segment' all, rowpctsum<hh>='Penetration'*(dda mms sav tda mtg cln cls baloc boloc heqb)*f=pctfmt. / nocellmerge misstext='0%';
+table bbseg_all='BB Segment' all, (dda_amt*rowpctsum<dda> mms_amt*rowpctsum<mms> sav_amt*rowpctsum<sav> tda_amt*rowpctsum<tda> mtg_amt*rowpctsum<mtg> 
                 cln_amt*rowpctsum<cln> cls_amt*rowpctsum<cls> baloc_amt*rowpctsum<baloc> boloc_amt*rowpctsum<boloc> heqb_amt*rowpctsum<heqb>)*f=pctdoll. / nocellmerge misstext='$0';
-table bbseg='BB Segment' all, rowpctsum<hh>*(vpos_num  mpos_num deptkt curdep_num chkpd ACH rcd_num br_tran_num chks_dep wire_in wire_out)*f=pctcomma. / nocellmerge misstext='0.0';
-format bbseg bbseg.;
+table bbseg_all='BB Segment' all, rowpctsum<hh>*(vpos_num  mpos_num deptkt curdep_num chkpd ACH rcd_num br_tran_num chks_dep wire_in wire_out)*f=pctcomma. / nocellmerge misstext='0.0';
 run;
 
       
