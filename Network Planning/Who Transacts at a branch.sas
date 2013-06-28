@@ -103,6 +103,7 @@ run;
 	by zip;
 	if a;
 	run;
+    
 
 
 	data circles;
@@ -267,9 +268,7 @@ run;
 data branches;
 input branch;
 datalines;
-430
-1146
-1312
+2
 ;
 run;
 
@@ -277,7 +276,7 @@ options mprint;
 data _null_;
    set branches;
 /*   call symput('br_num',trim(left(branch)));*/
-   call execute(catx('','%create_map(',branch,')'));
+   call execute(catx('','%nrstr(%create_map(',branch,'))'));
 run;
 
 
@@ -293,8 +292,10 @@ run;
 
 
 
+%delvars
+%put _user_;
 
-
+%create_map(6701)
 
 
 
